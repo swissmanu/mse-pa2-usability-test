@@ -1,6 +1,6 @@
 import { merge, Observable } from 'rxjs';
 import counter from './shared/counter';
-import { flatMap, map, startWith, tap } from './shared/instrument';
+import { map, startWith, switchMap, tap } from './shared/instrument';
 import onReady from './shared/onReady';
 import { default as createUI, Events, Update } from './ui';
 
@@ -9,13 +9,13 @@ export function createLogic(
   { showValue, setButtonsEnabled, setInput }: Update
 ): Observable<string> {
   return reset.pipe(
-    startWith(null),
     tap(() => {
       setButtonsEnabled(true);
       setInput('');
       showValue('');
     }),
-    flatMap(() =>
+    startWith(null),
+    switchMap(() =>
       merge(
         input.pipe(tap(() => setButtonsEnabled(false))),
         counter(increment, decrement).pipe(map((count) => `${count}`))
