@@ -5,7 +5,7 @@
   "tasks": [
     {
       "type": "npm",
-      "label": "webpack-dev-server",
+      "label": "webpack dev server",
       "script": "start",
       "promptOnClose": true,
       "isBackground": true,

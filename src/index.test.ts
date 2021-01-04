@@ -1,6 +1,6 @@
 import { fireEvent, queries, waitFor } from '@testing-library/dom';
 import { marbles } from 'rxjs-marbles/jest';
-import main, { createEngine } from '.';
+import main, { createLogic } from '.';
 import { Events, Update } from './ui';
 
 describe('Integration Test', () => {
@@ -122,7 +122,7 @@ describe('Integration Test', () => {
   });
 });
 
-describe('Engine', () => {
+describe('Logic', () => {
   let update: Update;
 
   beforeEach(() => {
@@ -142,7 +142,7 @@ describe('Engine', () => {
         input: m.hot('                                                '),
         reset: m.hot('                                                '),
       };
-      m.expect(createEngine(events, update)).toBeObservable('1-0-1-0-1-0-1-2');
+      m.expect(createLogic(events, update)).toBeObservable('1-0-1-0-1-0-1-2');
 
       m.flush();
       expect(update.setButtonsEnabled).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('Engine', () => {
         input: m.hot('                                              '),
         reset: m.hot('                                 ------r------'),
       };
-      m.expect(createEngine(events, update)).toBeObservable('1-0-1---1-2-1');
+      m.expect(createLogic(events, update)).toBeObservable('1-0-1---1-2-1');
 
       m.flush();
       expect(update.setButtonsEnabled).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe('Engine', () => {
         input: m.hot('                                 a-b-c-d-e-f'),
         reset: m.hot('                                            '),
       };
-      m.expect(createEngine(events, update)).toBeObservable('a-b-c-d-e-f');
+      m.expect(createLogic(events, update)).toBeObservable('a-b-c-d-e-f');
 
       m.flush();
       expect(update.setButtonsEnabled).toHaveBeenCalledTimes(6);
@@ -199,7 +199,7 @@ describe('Engine', () => {
         input: m.hot('                                 a-b-c---e-f'),
         reset: m.hot('                                 ------r----'),
       };
-      m.expect(createEngine(events, update)).toBeObservable('a-b-c---e-f');
+      m.expect(createLogic(events, update)).toBeObservable('a-b-c---e-f');
 
       m.flush();
       expect(update.setButtonsEnabled).toHaveBeenCalledTimes(6);
@@ -221,7 +221,7 @@ describe('Engine', () => {
         input: m.hot('                                 ----a---b------'),
         reset: m.hot('                                 ------r---r----'),
       };
-      m.expect(createEngine(events, update)).toBeObservable('1-0-a---b---1-0');
+      m.expect(createLogic(events, update)).toBeObservable('1-0-a---b---1-0');
 
       m.flush();
       expect(update.setButtonsEnabled).toHaveBeenCalledTimes(4);

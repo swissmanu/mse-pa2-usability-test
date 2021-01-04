@@ -7,8 +7,8 @@
     {
       "type": "chrome",
       "request": "launch",
-      "name": "Launch Browser",
-      "preLaunchTask": "webpack-dev-server",
+      "name": "Launch Chrome against localhost",
+      "preLaunchTask": "webpack dev server",
       "url": "http://localhost:3000",
       "webRoot": "${workspaceFolder}",
       "sourceMaps": true,

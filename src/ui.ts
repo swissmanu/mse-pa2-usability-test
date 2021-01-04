@@ -1,6 +1,6 @@
 import { html, setAttr, text } from 'redom';
 import { fromEvent, Observable } from 'rxjs';
-import { debounceTime, map } from 'rxjs/operators';
+import { debounceTime, map } from './shared/instrument';
 
 type UI = [HTMLElement, Events, Update];
 export type Events = {
