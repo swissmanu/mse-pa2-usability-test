@@ -4,15 +4,22 @@
 
 ## Usage
 
+- Install dependencies: `yarn`/`npm install`.
 - Open this project in Visual Studio Code.
 - Install prototype extension using the provided `.vsix` file.
-- Run the project using the provided launch configuration in Google Chrome.
+- Press `F5` to launch the development server and open the applications UI in Google Chrome
+- Run tests using `yarn test`/`npm test`
 
 ## Commands
 
 ```bash
+# Yarn:
 yarn               # Install all dependencies
-yarn start         # Start Web Server and Open Problem in Browser
 yarn test          # Run test
 yarn test --watch  # Rerun tests upon changes
+
+# npm:
+npm install        # Install all dependencies
+npm test           # Run test
+npm test --watch   # Rerun tests upon changes
 ```

@@ -56,8 +56,8 @@ export function match<T>(p: EventPattern<T>): (e: Event) => T {
   };
 }
 
-export function serialize(event: Event): {} {
-  return match<{}>({
+export function serialize(event: Event): Record<string, unknown> {
+  return match<Record<string, unknown>>({
     completed: identity,
     error: (errorEvent) => ({
       ...errorEvent,

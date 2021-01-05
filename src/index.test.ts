@@ -1,3 +1,5 @@
+jest.mock('stacktrace-js');
+
 import { fireEvent, queries, waitFor } from '@testing-library/dom';
 import { marbles } from 'rxjs-marbles/jest';
 import main, { createLogic } from '.';
@@ -35,7 +37,7 @@ describe('Integration Test', () => {
   });
 
   describe('Counter', () => {
-    test('increment button should log a incremented', async () => {
+    test('increment button should log a incremented', () => {
       fireEvent.click(incrementButton);
       expect(value.textContent).toEqual('1');
       fireEvent.click(incrementButton);
@@ -44,7 +46,7 @@ describe('Integration Test', () => {
       expect(value.textContent).toEqual('2');
     });
 
-    test('decrement button should log a decremented value', async () => {
+    test('decrement button should log a decremented value', () => {
       fireEvent.click(decrementButton);
       expect(value.textContent).toEqual('-1');
       fireEvent.click(decrementButton);
@@ -53,7 +55,7 @@ describe('Integration Test', () => {
       expect(value.textContent).toEqual('-2');
     });
 
-    test('increment and decrement button can be used simultaneously', async () => {
+    test('increment and decrement button can be used simultaneously', () => {
       fireEvent.click(decrementButton);
       expect(value.textContent).toEqual('-1');
       fireEvent.click(incrementButton);
@@ -83,7 +85,7 @@ describe('Integration Test', () => {
   });
 
   describe('Reset', () => {
-    test('reverts the counter so it works again as after the first usage', async () => {
+    test('reverts the counter so it works again as after the first usage', () => {
       fireEvent.click(incrementButton);
       expect(value.textContent).toEqual('1');
       fireEvent.click(incrementButton);
