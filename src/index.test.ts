@@ -1,239 +1,160 @@
-jest.mock('stacktrace-js');
-
-import { fireEvent, queries, waitFor } from '@testing-library/dom';
-import { marbles } from 'rxjs-marbles/jest';
-import main, { createLogic } from '.';
-import { Events, Update } from './ui';
+import { fireEvent, queries, waitFor, within } from '@testing-library/dom';
+import todoApp from '.';
+import { APIInterface } from './api';
+import createMockedApi from './api.mock';
 
 describe('Integration Test', () => {
-  const inputValue = 'hey there!';
-  let incrementButton: HTMLButtonElement;
-  let decrementButton: HTMLButtonElement;
-  let input: HTMLInputElement;
-  let resetButton: HTMLButtonElement;
-  let value: HTMLElement;
+  let app: HTMLElement;
+  let mockedApi: APIInterface;
+  let nextPageButton: HTMLButtonElement;
+  let prevPageButton: HTMLButtonElement;
+  let currentPage: HTMLSpanElement;
+  let createTodoInput: HTMLInputElement;
+  let todoList: HTMLUListElement;
 
   beforeEach(async () => {
-    const app = main();
+    mockedApi = createMockedApi();
+    app = todoApp(mockedApi);
 
-    incrementButton = (await queries.findByTestId(
+    nextPageButton = (await queries.findByTestId(
       app,
-      'increment'
+      'nextPage'
     )) as HTMLButtonElement;
-    decrementButton = (await queries.findByTestId(
+    prevPageButton = (await queries.findByTestId(
       app,
-      'decrement'
+      'prevPage'
     )) as HTMLButtonElement;
-    input = (await queries.findByTestId(app, 'input')) as HTMLInputElement;
-    resetButton = (await queries.findByTestId(
+    currentPage = await queries.findByTestId(app, 'currentPage');
+    createTodoInput = (await queries.findByTestId(
       app,
-      'reset'
-    )) as HTMLButtonElement;
-    value = await queries.findByTestId(app, 'value');
+      'createTodoInput'
+    )) as HTMLInputElement;
+    todoList = (await queries.findByTestId(
+      app,
+      'todoList'
+    )) as HTMLUListElement;
   });
 
-  test('shows "Ready" at start', () => {
-    expect(value.textContent).toEqual('Ready');
+  test('shows first page with ten todos by default', async () => {
+    expect(mockedApi.getNumberOfPages).toBeCalledTimes(1);
+    expect(mockedApi.getTodos).toBeCalledTimes(1);
+    expect(mockedApi.getTodos).toBeCalledWith(1);
+
+    expect(currentPage.textContent).toEqual('Page: 1');
+    await waitFor(() => expect(todoList.children).toHaveLength(10));
   });
 
-  describe('Counter', () => {
-    test('increment button should log a incremented', () => {
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('1');
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('2');
-      fireEvent(incrementButton, new MouseEvent('dblclick', { button: 0 }));
-      expect(value.textContent).toEqual('2');
-    });
+  describe('when changing pages,', () => {
+    test('the prev and next buttons do always have an appropriate enabled/disabled state', async () => {
+      expect(prevPageButton.disabled).toBe(true);
+      expect(nextPageButton.disabled).toBe(false);
 
-    test('decrement button should log a decremented value', () => {
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('-1');
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('-2');
-      fireEvent(decrementButton, new MouseEvent('dblclick', { button: 0 }));
-      expect(value.textContent).toEqual('-2');
-    });
+      fireEvent.click(nextPageButton);
+      expect(mockedApi.getTodos).toHaveBeenLastCalledWith(2);
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 2'));
+      expect(prevPageButton.disabled).toBe(false);
+      expect(nextPageButton.disabled).toBe(true);
 
-    test('increment and decrement button can be used simultaneously', () => {
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('-1');
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('0');
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('1');
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('0');
+      fireEvent.click(prevPageButton);
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 1'));
+      expect(prevPageButton.disabled).toBe(true);
+      expect(nextPageButton.disabled).toBe(false);
     });
   });
 
-  describe('Manual Input', () => {
-    test('input field value is logged', async () => {
-      input.value = inputValue;
-      fireEvent.keyUp(input);
-      await waitFor(() => expect(value.textContent).toEqual(inputValue));
+  describe('creating a todo', () => {
+    const title = 'Fancy, Shiny new Todo';
+
+    test('clears the input field, creates the todo and shows it in the list on first position', async () => {
+      createTodoInput.value = title;
+      fireEvent.keyUp(createTodoInput, { key: 'Enter' });
+      expect(createTodoInput.value).toEqual('');
+      expect(mockedApi.createTodo).toHaveBeenCalledWith({ title });
+      await waitFor(() =>
+        expect(mockedApi.getNumberOfPages).toHaveBeenCalledTimes(2)
+      );
+      await waitFor(() => within(todoList).getByText(title));
     });
 
-    test('changing the input field disables the counter buttons', async () => {
-      input.value = inputValue;
-      fireEvent.keyUp(input);
+    test('being on another page than the first creates the todo and shows it on the first page', async () => {
+      fireEvent.click(nextPageButton);
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 2'));
 
-      await waitFor(() => expect(value.textContent).toEqual(inputValue));
-      await waitFor(() => expect(incrementButton.disabled).toBe(true));
-      await waitFor(() => expect(decrementButton.disabled).toBe(true));
-    });
-  });
+      createTodoInput.value = '2';
+      fireEvent.keyUp(createTodoInput, { key: 'Enter' });
+      await waitFor(() => within(todoList).getByText('2'));
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 1'));
 
-  describe('Reset', () => {
-    test('reverts the counter so it works again as after the first usage', () => {
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('1');
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('2');
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('1');
+      fireEvent.click(nextPageButton);
+      fireEvent.click(nextPageButton);
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 3'));
 
-      fireEvent.click(resetButton);
-      expect(incrementButton.disabled).toBe(false);
-      expect(decrementButton.disabled).toBe(false);
-
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('1');
-      fireEvent.click(incrementButton);
-      expect(value.textContent).toEqual('2');
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('1');
-      fireEvent.click(decrementButton);
-      expect(value.textContent).toEqual('0');
-    });
-
-    test('reverts the manual input so it works again as after the first usage', async () => {
-      input.value = inputValue;
-      fireEvent.keyUp(input);
-      await waitFor(() => expect(value.textContent).toEqual(inputValue));
-
-      fireEvent.click(resetButton);
-      expect(incrementButton.disabled).toBe(false);
-      expect(decrementButton.disabled).toBe(false);
-      expect(input.value).toEqual('');
-
-      input.value = inputValue;
-      fireEvent.keyUp(input);
-      await waitFor(() => expect(value.textContent).toEqual(inputValue));
+      createTodoInput.value = '3';
+      fireEvent.keyUp(createTodoInput, { key: 'Enter' });
+      await waitFor(() => within(todoList).getByText('3'));
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 1'));
     });
   });
-});
 
-describe('Logic', () => {
-  let update: Update;
+  describe('deleting a todo', () => {
+    test('removes the todo from the list', async () => {
+      const [firstTodo, secondTodo] = within(todoList).getAllByTestId('todo');
+      const { textContent: secondTodoTitle } = secondTodo;
+      const deleteButton = within(firstTodo).getByTestId('delete');
+      fireEvent.click(deleteButton);
 
-  beforeEach(() => {
-    update = {
-      setButtonsEnabled: jest.fn(),
-      setInput: jest.fn(),
-      showValue: jest.fn(),
-    };
+      await waitFor(() => {
+        const [firstTodoAfterUpdate] = within(todoList).getAllByTestId('todo');
+        expect(firstTodoAfterUpdate.textContent).toEqual(secondTodoTitle);
+      });
+    });
+
+    test('removes the todo from the list once', async () => {
+      const [firstTodo, secondTodo] = within(todoList).getAllByTestId('todo');
+      const { textContent: secondTodoTitle } = secondTodo;
+      const deleteButton = within(firstTodo).getByTestId('delete');
+      fireEvent.click(deleteButton);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        const [firstTodoAfterUpdate] = within(todoList).getAllByTestId('todo');
+        expect(firstTodoAfterUpdate.textContent).toEqual(secondTodoTitle);
+      });
+    });
+
+    test('stays on the page of the deleted todo', async () => {
+      fireEvent.click(nextPageButton);
+      await waitFor(() => expect(currentPage.textContent).toEqual('Page: 2'));
+      const [firstTodo, { textContent: secondTodoTitle }] = within(
+        todoList
+      ).getAllByTestId('todo');
+      const deleteButton = within(firstTodo).getByTestId('delete');
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        const [firstTodoAfterUpdate] = within(todoList).getAllByTestId('todo');
+        expect(firstTodoAfterUpdate.textContent).toEqual(secondTodoTitle);
+      });
+      expect(currentPage.textContent).toEqual('Page: 2');
+    });
+
+    test('works for a just created todo', async () => {
+      const [{ textContent: firstTodoBeforeUpdate }] = within(
+        todoList
+      ).getAllByTestId('todo');
+      const title = 'do it!';
+      createTodoInput.value = title;
+      fireEvent.keyUp(createTodoInput, { key: 'Enter' });
+
+      await waitFor(() => within(todoList).getByText(title));
+      const justCreatedTodo = within(todoList).getByText(title);
+      fireEvent.click(within(justCreatedTodo).getByTestId('delete'));
+      await waitFor(() => {
+        const [firstTodoAfterUpdate] = within(
+          queries.getByTestId(app, 'todoList')
+        ).getAllByTestId('todo');
+        expect(firstTodoAfterUpdate.textContent).toEqual(firstTodoBeforeUpdate);
+      });
+    });
   });
-
-  test(
-    'can count up and down',
-    marbles((m) => {
-      const events: Events = {
-        decrement: m.hot('                             --d---d---d----'),
-        increment: m.hot('                             i---i---i---i-i'),
-        input: m.hot('                                                '),
-        reset: m.hot('                                                '),
-      };
-      m.expect(createLogic(events, update)).toBeObservable('1-0-1-0-1-0-1-2');
-
-      m.flush();
-      expect(update.setButtonsEnabled).not.toHaveBeenCalled();
-      expect(update.setInput).not.toHaveBeenCalled();
-    })
-  );
-
-  test(
-    'can reset the counter',
-    marbles((m) => {
-      const events: Events = {
-        decrement: m.hot('                             --d---------d'),
-        increment: m.hot('                             i---i---i-i--'),
-        input: m.hot('                                              '),
-        reset: m.hot('                                 ------r------'),
-      };
-      m.expect(createLogic(events, update)).toBeObservable('1-0-1---1-2-1');
-
-      m.flush();
-      expect(update.setButtonsEnabled).toHaveBeenCalledTimes(1);
-      expect(update.setButtonsEnabled).toHaveBeenCalledWith(true);
-      expect(update.showValue).toHaveBeenCalledTimes(1);
-      expect(update.showValue).toHaveBeenCalledWith('');
-      expect(update.setInput).toHaveBeenCalledTimes(1);
-      expect(update.setInput).toHaveBeenCalledWith('');
-    })
-  );
-
-  test(
-    'can use input',
-    marbles((m) => {
-      const events: Events = {
-        decrement: m.hot('                                         '),
-        increment: m.hot('                                        '),
-        input: m.hot('                                 a-b-c-d-e-f'),
-        reset: m.hot('                                            '),
-      };
-      m.expect(createLogic(events, update)).toBeObservable('a-b-c-d-e-f');
-
-      m.flush();
-      expect(update.setButtonsEnabled).toHaveBeenCalledTimes(6);
-      expect(update.setButtonsEnabled).toHaveBeenLastCalledWith(false);
-      expect(update.showValue).not.toHaveBeenCalled();
-      expect(update.setInput).not.toHaveBeenCalled();
-    })
-  );
-
-  test(
-    'can use input after resetting',
-    marbles((m) => {
-      const events: Events = {
-        decrement: m.hot('                                         '),
-        increment: m.hot('                                        '),
-        input: m.hot('                                 a-b-c---e-f'),
-        reset: m.hot('                                 ------r----'),
-      };
-      m.expect(createLogic(events, update)).toBeObservable('a-b-c---e-f');
-
-      m.flush();
-      expect(update.setButtonsEnabled).toHaveBeenCalledTimes(6);
-      expect(update.setButtonsEnabled).toHaveBeenNthCalledWith(4, true);
-      expect(update.setButtonsEnabled).toHaveBeenLastCalledWith(false);
-      expect(update.showValue).toHaveBeenCalledTimes(1);
-      expect(update.showValue).toHaveBeenCalledWith('');
-      expect(update.setInput).toHaveBeenCalledTimes(1);
-      expect(update.setInput).toHaveBeenCalledWith('');
-    })
-  );
-
-  test(
-    'can use counter and input',
-    marbles((m) => {
-      const events: Events = {
-        decrement: m.hot('                             --d-----------d'),
-        increment: m.hot('                             i-----------i--'),
-        input: m.hot('                                 ----a---b------'),
-        reset: m.hot('                                 ------r---r----'),
-      };
-      m.expect(createLogic(events, update)).toBeObservable('1-0-a---b---1-0');
-
-      m.flush();
-      expect(update.setButtonsEnabled).toHaveBeenCalledTimes(4);
-      expect(update.setButtonsEnabled).toHaveBeenNthCalledWith(2, true);
-      expect(update.setButtonsEnabled).toHaveBeenNthCalledWith(3, false);
-      expect(update.setButtonsEnabled).toHaveBeenLastCalledWith(true);
-      expect(update.showValue).toHaveBeenCalledTimes(2);
-      expect(update.showValue).toHaveBeenCalledWith('');
-      expect(update.setInput).toHaveBeenCalledTimes(2);
-      expect(update.setInput).toHaveBeenCalledWith('');
-    })
-  );
 });

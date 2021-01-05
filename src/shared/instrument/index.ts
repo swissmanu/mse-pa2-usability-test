@@ -240,3 +240,17 @@ export function debounceTime<T>(
       );
   });
 }
+
+export function filter<T>(
+  predicate: (value: T, index: number) => boolean,
+  thisArg?: any // eslint-disable-line @typescript-eslint/explicit-module-boundary-types
+): MonoTypeOperatorFunction<T> {
+  const sourceLocation = StackTrace.get();
+  return operate((source, subscriber) => {
+    source
+      .pipe(RxOps.filter(predicate, thisArg))
+      .subscribe(
+        new TelemetrySubscriber(subscriber, sourceLocation, sendTelemetry)
+      );
+  });
+}

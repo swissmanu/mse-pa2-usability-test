@@ -1,106 +1,159 @@
-import { html, setAttr, text } from 'redom';
-import { fromEvent, Observable } from 'rxjs';
-import { debounceTime, map } from './shared/instrument';
+import { html, list, RedomComponent, setAttr, setChildren, text } from 'redom';
+import { fromEvent, Observable, Subject } from 'rxjs';
+import { Todo } from './api';
+import { filter, map } from './shared/instrument';
 
 type UI = [HTMLElement, Events, Update];
-export type Events = {
-  increment: Observable<Event>;
-  decrement: Observable<Event>;
-  input: Observable<string>;
-  reset: Observable<Event>;
+type Events = {
+  nextPage: Observable<Event>;
+  prevPage: Observable<Event>;
+  createNewTodo: Observable<string>;
+  deleteTodo: Observable<Todo>;
 };
-export type Update = {
-  showValue: (value: string) => void;
-  setButtonsEnabled: (enabled: boolean) => void;
-  setInput: (value: string) => void;
+type Update = {
+  showTodos: (todos: Todo[]) => void;
+  showError: (error: Error) => void;
+  setNextPageButtonEnabled: (enabled: boolean) => void;
+  setPrevPageButtonEnabled: (enabled: boolean) => void;
+  setCurrentPage: (page: number) => void;
+  resetCreateTodoInput: () => void;
 };
+
+class TodoItem implements RedomComponent {
+  el: HTMLLIElement;
+
+  constructor() {
+    this.el = html('li', {
+      style: { 'list-style': 'none' },
+      'data-testid': 'todo',
+    });
+  }
+
+  update(
+    todo: Todo,
+    _index: number,
+    _items: Todo[],
+    { deleteTodo }: { deleteTodo: (todo: Todo) => void }
+  ): void {
+    const { title, completed } = todo;
+    const truncated = title.length > 50 ? `${title.substr(0, 50)}…` : title;
+    const deleteButton = html('button', {
+      textContent: 'Delete',
+      'data-testid': 'delete',
+    });
+    deleteButton.onclick = (): void => deleteTodo(todo);
+
+    setChildren(this.el, [
+      html('input', { type: 'checkbox', checked: completed, disabled: true }),
+      text(` ${truncated} `),
+      deleteButton,
+    ]);
+  }
+}
 
 export default function createUI(): UI {
-  const valueDisplay = html('div', {
-    textContent: 'Ready',
-    'data-testid': 'value',
-  });
+  const nextPageButton = html('button', { 'data-testid': 'nextPage' }, 'Next');
+  const setNextPageButtonEnabled: Update['setNextPageButtonEnabled'] = (
+    enabled
+  ) => setAttr(nextPageButton, { disabled: !enabled });
+  const nextPage = fromEvent(nextPageButton, 'click');
 
-  const incrementButton = html('button', {
-    textContent: 'Increment',
-    'data-testid': 'increment',
-  });
-  const incrementButtonClicks = fromEvent(incrementButton, 'click');
+  const prevPageButton = html('button', { 'data-testid': 'prevPage ' }, 'Prev');
+  const setPrevPageButtonEnabled: Update['setPrevPageButtonEnabled'] = (
+    enabled
+  ) => setAttr(prevPageButton, { disabled: !enabled });
+  const prevPage = fromEvent(prevPageButton, 'click');
 
-  const decrementButton = html('button', {
-    textContent: 'Decrement',
-    'data-testid': 'decrement',
-  });
-  const decrementButtonClicks = fromEvent(decrementButton, 'click');
+  const currentPage = html('span', { 'data-testid': 'currentPage' });
+  const setCurrentPage: Update['setCurrentPage'] = (page) =>
+    setAttr(currentPage, 'textContent', `Page: ${page}`);
 
-  const input = html('input', { type: 'text', 'data-testid': 'input' });
-  const inputChanges = fromEvent(input, 'keyup').pipe(
-    debounceTime(300),
-    map((e) => (e.target as HTMLInputElement).value)
+  const deleteTodo = new Subject<Todo>();
+  const todoList = list(
+    html('ul', {
+      'data-testid': 'todoList',
+      style: { 'padding-left': '0.5em' },
+    }),
+    TodoItem
   );
+  const showTodos: Update['showTodos'] = (todos) =>
+    todoList.update(todos, {
+      deleteTodo: (todo: Todo) => deleteTodo.next(todo),
+    });
 
-  const resetButton = html('button', {
-    textContent: 'Reset',
-    'data-testid': 'reset',
+  const createTodoInput = html('input', {
+    type: 'text',
+    placeholder: 'Enter new Todo and press Return to create',
+    'data-testid': 'createTodoInput',
   });
-  const resetButtonClicks = fromEvent(resetButton, 'click');
+  const createNewTodo: Events['createNewTodo'] = fromEvent<KeyboardEvent>(
+    createTodoInput,
+    'keyup'
+  ).pipe(
+    filter((e) => e.key === 'Enter'),
+    map((e) => (e.target as HTMLInputElement).value.trim()),
+    filter((v) => v.length > 0)
+  );
+  const resetCreateTodoInput: Update['resetCreateTodoInput'] = () => {
+    setAttr(createTodoInput, 'value', '');
+  };
 
-  const showValue = (v: string): void => {
-    setAttr(valueDisplay, 'textContent', v);
-  };
-  const setButtonsEnabled = (enabled: boolean): void => {
-    setAttr(incrementButton, { disabled: !enabled });
-    setAttr(decrementButton, { disabled: !enabled });
-  };
-  const setInput = (value: string): void => {
-    setAttr(input, 'value', value);
+  const ui = html('main', [
+    html('section', [
+      html('header', [
+        html('h2', 'Todos'),
+        html('p', createTodoInput),
+        html('p'),
+      ]),
+      todoList,
+    ]),
+    html(
+      'footer',
+      html('nav', [
+        currentPage,
+        text('  '),
+        prevPageButton,
+        text('  '),
+        nextPageButton,
+      ])
+    ),
+  ]);
+  const showError: Update['showError'] = (error) => {
+    const reloadButton = html('button', { textContent: 'Restart' });
+    reloadButton.onclick = (): void => location.reload();
+
+    setChildren(ui, [
+      html('section', [
+        html('h2', { textContent: 'Oh noes! 🤯' }),
+        html('p', { textContent: 'Something went wrong.' }),
+        html('p', [
+          html('code', {
+            textContent:
+              error.name && error.message
+                ? `${error.name}: ${error.message}`
+                : JSON.stringify(error),
+          }),
+        ]),
+        reloadButton,
+      ]),
+    ]);
   };
 
   return [
-    html('main', [
-      html(
-        'p',
-        text(
-          'Count up and down using the buttons, show the entered text from the input field and reset using the reset button. Check the tests. Everything looking good?'
-        )
-      ),
-      html(
-        'section',
-        html('fieldset', [
-          html('legend', {
-            textContent: 'Counter',
-          }),
-          decrementButton,
-          text(' '),
-          incrementButton,
-        ])
-      ),
-      html(
-        'section',
-        html('fieldset', [
-          html('legend', { textContent: 'Manual Input' }),
-          [input],
-        ])
-      ),
-      html('section', resetButton),
-      html(
-        'section',
-        html('fieldset', [
-          html('legend', { textContent: 'Output Log' }),
-          valueDisplay,
-        ])
-      ),
-    ]),
+    ui,
     {
-      increment: incrementButtonClicks,
-      decrement: decrementButtonClicks,
-      input: inputChanges,
-      reset: resetButtonClicks,
+      nextPage,
+      prevPage,
+      createNewTodo,
+      deleteTodo: deleteTodo.asObservable(),
     },
     {
-      showValue,
-      setInput,
-      setButtonsEnabled,
+      showTodos,
+      showError,
+      setNextPageButtonEnabled,
+      setPrevPageButtonEnabled,
+      setCurrentPage,
+      resetCreateTodoInput,
     },
   ];
 }
